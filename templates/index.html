@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stream Manager для OBS</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #18181b 0%, #27272a 100%);
+            color: #f9fafb;
+            margin: 0;
+            padding: 12px;
+            line-height: 1.4;
+        }
+
+        .container {
+            max-width: 320px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 16px;
+            margin: 0 0 12px 0;
+            font-weight: 600;
+            border-bottom: 2px solid #22c55e;
+            padding-bottom: 6px;
+        }
+
+        .form-group {
+            margin-bottom: 10px;
+        }
+
+        label {
+            display: block;
+            font-size: 12px;
+            font-weight: 500;
+            margin-bottom: 4px;
+            color: #d1d5db;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 8px 10px;
+            border-radius: 4px;
+            border: 1px solid #3f3f46;
+            background: #1f1f23;
+            color: #f9fafb;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #22c55e;
+            background: #27272a;
+            box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1);
+        }
+
+        .platforms {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            margin-bottom: 10px;
+            padding: 8px;
+            background: #1f1f23;
+            border-radius: 4px;
+            border: 1px solid #3f3f46;
+        }
+
+        .platform-check {
+            display: flex;
+            align-items: center;
+            font-size: 12px;
+        }
+
+        input[type="checkbox"] {
+            margin-right: 6px;
+            cursor: pointer;
+            accent-color: #22c55e;
+        }
+
+        .platform-check label {
+            margin: 0;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 400;
+            text-transform: none;
+            letter-spacing: 0;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+
+        button {
+            flex: 1;
+            padding: 8px 12px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        #btn-update {
+            background: #22c55e;
+            color: #052e16;
+            flex: 2;
+        }
+
+        #btn-update:hover:not(:disabled) {
+            background: #16a34a;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        #btn-update:disabled {
+            opacity: 0.5;
+            cursor: default;
+            transform: none;
+        }
+
+        #btn-clear {
+            background: #6b7280;
+            color: #f9fafb;
+        }
+
+        #btn-clear:hover {
+            background: #4b5563;
+        }
+
+        .status {
+            font-size: 11px;
+            padding: 8px;
+            border-radius: 4px;
+            min-height: 24px;
+            margin-bottom: 10px;
+            border: 1px solid #3f3f46;
+            background: #1f1f23;
+            display: flex;
+            align-items: center;
+        }
+
+        .status.success {
+            background: rgba(34, 197, 94, 0.1);
+            border-color: #22c55e;
+            color: #86efac;
+        }
+
+        .status.error {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: #ef4444;
+            color: #fca5a5;
+        }
+
+        .status.loading {
+            background: rgba(59, 130, 246, 0.1);
+            border-color: #3b82f6;
+            color: #93c5fd;
+        }
+
+        .history-section {
+            margin-top: 12px;
+            border-top: 1px solid #3f3f46;
+            padding-top: 10px;
+        }
+
+        .history-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+        }
+
+        #history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .history-item {
+            padding: 6px 8px;
+            border-radius: 3px;
+            border: 1px solid #3f3f46;
+            background: #1f1f23;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 11px;
+        }
+
+        .history-item:hover {
+            background: #27272a;
+            border-color: #22c55e;
+        }
+
+        .history-item strong {
+            display: block;
+            color: #f9fafb;
+            margin-bottom: 2px;
+        }
+
+        .history-item-category {
+            color: #9ca3af;
+            font-size: 10px;
+            margin-bottom: 2px;
+        }
+
+        .history-item-time {
+            color: #6b7280;
+            font-size: 9px;
+        }
+
+        /* Scrollbar styling */
+        #history-list::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        #history-list::-webkit-scrollbar-track {
+            background: #1f1f23;
+            border-radius: 3px;
+        }
+
+        #history-list::-webkit-scrollbar-thumb {
+            background: #3f3f46;
+            border-radius: 3px;
+        }
+
+        #history-list::-webkit-scrollbar-thumb:hover {
+            background: #4b5563;
+        }
+
+        .config-warning {
+            font-size: 10px;
+            padding: 6px;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid #ef4444;
+            border-radius: 3px;
+            color: #fca5a5;
+            margin-bottom: 10px;
+            display: none;
+        }
+
+        .config-warning.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎬 Stream Manager</h1>
+
+        <div class="config-warning" id="config-warning">
+            ⚠️ Некоторые платформы не настроены. Проверьте окружение.
+        </div>
+
+        <div class="form-group">
+            <label for="title">Название стрима</label>
+            <input
+                id="title"
+                type="text"
+                placeholder="Введите заголовок..."
+                maxlength="120"
+            />
+        </div>
+
+        <div class="form-group">
+            <label for="category">Категория / Игра</label>
+            <input
+                id="category"
+                type="text"
+                placeholder="Например: GTA V, Just Chatting..."
+                maxlength="100"
+            />
+        </div>
+
+        <div class="form-group">
+            <label>Платформы</label>
+            <div class="platforms">
+                <div class="platform-check">
+                    <input type="checkbox" id="p-twitch" checked />
+                    <label for="p-twitch">Twitch</label>
+                </div>
+                <div class="platform-check">
+                    <input type="checkbox" id="p-youtube" />
+                    <label for="p-youtube">YouTube</label>
+                </div>
+                <div class="platform-check">
+                    <input type="checkbox" id="p-trovo" />
+                    <label for="p-trovo">Trovo</label>
+                </div>
+                <div class="platform-check">
+                    <input type="checkbox" id="p-vkplay" />
+                    <label for="p-vkplay">VK Play</label>
+                </div>
+                <div class="platform-check">
+                    <input type="checkbox" id="p-kick" />
+                    <label for="p-kick">Kick</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="button-group">
+            <button id="btn-update">✓ Обновить</button>
+            <button id="btn-clear">Очистить</button>
+        </div>
+
+        <div class="status" id="status"></div>
+
+        <div class="history-section">
+            <div class="history-title">История</div>
+            <div id="history-list"></div>
+        </div>
+    </div>
+
+    <script>
+        const titleInput = document.getElementById("title");
+        const categoryInput = document.getElementById("category");
+        const btnUpdate = document.getElementById("btn-update");
+        const btnClear = document.getElementById("btn-clear");
+        const statusEl = document.getElementById("status");
+        const configWarning = document.getElementById("config-warning");
+
+        function getPlatforms() {
+            const p = [];
+            if (document.getElementById("p-twitch").checked) p.push("twitch");
+            if (document.getElementById("p-youtube").checked) p.push("youtube");
+            if (document.getElementById("p-trovo").checked) p.push("trovo");
+            if (document.getElementById("p-vkplay").checked) p.push("vkplay");
+            if (document.getElementById("p-kick").checked) p.push("kick");
+            return p;
+        }
+
+        function showStatus(message, type = "info") {
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+        }
+
+        btnUpdate.addEventListener("click", async () => {
+            const title = titleInput.value.trim();
+            const category = categoryInput.value.trim();
+            const platforms = getPlatforms();
+
+            if (!title) {
+                showStatus("⚠️ Введите название стрима", "error");
+                return;
+            }
+            if (platforms.length === 0) {
+                showStatus("⚠️ Выберите хотя бы одну платформу", "error");
+                return;
+            }
+
+            btnUpdate.disabled = true;
+            showStatus("⏳ Обновление...", "loading");
+
+            try {
+                const res = await fetch("/update", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ title, category, platforms })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    showStatus("✅ " + data.message, "success");
+                    await loadHistory();
+                } else {
+                    showStatus("❌ " + (data.error || "Ошибка обновления"), "error");
+                }
+            } catch (e) {
+                showStatus("❌ Ошибка сети: " + e.toString(), "error");
+            } finally {
+                btnUpdate.disabled = false;
+            }
+        });
+
+        btnClear.addEventListener("click", () => {
+            titleInput.value = "";
+            categoryInput.value = "";
+            showStatus("");
+        });
+
+        async function loadHistory() {
+            try {
+                const res = await fetch("/history");
+                const history = await res.json();
+                const list = document.getElementById("history-list");
+                list.innerHTML = "";
+
+                if (history.length === 0) {
+                    list.innerHTML = '<div style="color: #6b7280; font-size: 11px; padding: 8px; text-align: center;">История пуста</div>';
+                    return;
+                }
+
+                history.forEach((item) => {
+                    const div = document.createElement("div");
+                    div.className = "history-item";
+                    div.innerHTML = `
+                        <strong>${item.title || "(пусто)"}</strong>
+                        <div class="history-item-category">${item.category || "(без категории)"}</div>
+                        <div class="history-item-time">${item.timestamp}</div>
+                    `;
+                    div.addEventListener("click", () => {
+                        titleInput.value = item.title;
+                        categoryInput.value = item.category;
+                    });
+                    list.appendChild(div);
+                });
+            } catch (e) {
+                console.error("Error loading history:", e);
+            }
+        }
+
+        async function checkConfig() {
+            try {
+                const res = await fetch("/validate-config");
+                const config = await res.json();
+                const allConfigured = Object.values(config).every(v => v);
+                if (!allConfigured) {
+                    configWarning.classList.add("show");
+                }
+            } catch (e) {
+                console.error("Error checking config:", e);
+            }
+        }
+
+        // Инициализация
+        loadHistory();
+        checkConfig();
+
+        // Auto-save при изменении
+        titleInput.addEventListener("change", () => {
+            localStorage.setItem("lastTitle", titleInput.value);
+        });
+        categoryInput.addEventListener("change", () => {
+            localStorage.setItem("lastCategory", categoryInput.value);
+        });
+
+        // Восстановление из localStorage
+        titleInput.value = localStorage.getItem("lastTitle") || "";
+        categoryInput.value = localStorage.getItem("lastCategory") || "";
+    </script>
+</body>
+</html>
