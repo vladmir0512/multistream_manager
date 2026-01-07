@@ -25,20 +25,173 @@ app = Flask(__name__)
 
 TWITCH_CONFIG = {
     "client_id": os.getenv("TWITCH_CLIENT_ID", ""),
+    "client_secret": os.getenv("TWITCH_CLIENT_SECRET", ""),
     "access_token": os.getenv("TWITCH_TOKEN", ""),
+    "refresh_token": os.getenv("TWITCH_REFRESH_TOKEN", ""),
     "broadcaster_id": os.getenv("TWITCH_BROADCASTER_ID", ""),
 }
 
+def refresh_twitch_token() -> bool:
+    """Обновляет токен Twitch с помощью refresh token"""
+    try:
+        url = "https://id.twitch.tv/oauth2/token"
+        data = {
+            "grant_type": "refresh_token",
+            "refresh_token": TWITCH_CONFIG["refresh_token"],
+            "client_id": TWITCH_CONFIG["client_id"],
+            "client_secret": TWITCH_CONFIG["client_secret"]
+        }
+        resp = requests.post(url, data=data, timeout=10)
+        resp.raise_for_status()
+        token_data = resp.json()
+
+        TWITCH_CONFIG["access_token"] = token_data["access_token"]
+        if "refresh_token" in token_data:
+            TWITCH_CONFIG["refresh_token"] = token_data["refresh_token"]
+
+        # Обновляем переменные окружения, если возможно
+        os.environ["TWITCH_TOKEN"] = TWITCH_CONFIG["access_token"]
+        if "refresh_token" in token_data:
+            os.environ["TWITCH_REFRESH_TOKEN"] = TWITCH_CONFIG["refresh_token"]
+
+        print("[TWITCH] Token refreshed successfully")
+        return True
+    except Exception as e:
+        print(f"[TWITCH] Failed to refresh token: {e}")
+        return False
+
+def make_twitch_request(method: str, url: str, headers: Dict = None, params: Dict = None, json: Dict = None, timeout: int = 5) -> requests.Response:
+    """Делает запрос к Twitch API с автоматическим рефрешем токена при 401"""
+    if headers is None:
+        headers = {}
+    if "Authorization" not in headers:
+        headers["Authorization"] = f"Bearer {TWITCH_CONFIG['access_token']}"
+    if "Client-ID" not in headers:
+        headers["Client-ID"] = TWITCH_CONFIG["client_id"]
+
+    resp = requests.request(method, url, headers=headers, params=params, json=json, timeout=timeout)
+
+    # Если 401 Unauthorized, пытаемся рефрешить токен и повторить запрос
+    if resp.status_code == 401:
+        if refresh_twitch_token():
+            # Обновляем заголовок с новым токеном
+            headers["Authorization"] = f"Bearer {TWITCH_CONFIG['access_token']}"
+            resp = requests.request(method, url, headers=headers, params=params, json=json, timeout=timeout)
+
+    return resp
+
 YOUTUBE_CONFIG = {
+    "client_id": os.getenv("YOUTUBE_CLIENT_ID", ""),
+    "client_secret": os.getenv("YOUTUBE_CLIENT_SECRET", ""),
     "access_token": os.getenv("YOUTUBE_TOKEN", ""),
+    "refresh_token": os.getenv("YOUTUBE_REFRESH_TOKEN", ""),
     "video_id": os.getenv("YOUTUBE_VIDEO_ID", ""),
 }
 
+def refresh_youtube_token() -> bool:
+    """Обновляет токен YouTube с помощью refresh token"""
+    try:
+        url = "https://oauth2.googleapis.com/token"
+        data = {
+            "grant_type": "refresh_token",
+            "refresh_token": YOUTUBE_CONFIG["refresh_token"],
+            "client_id": YOUTUBE_CONFIG["client_id"],
+            "client_secret": YOUTUBE_CONFIG["client_secret"]
+        }
+        resp = requests.post(url, data=data, timeout=10)
+        resp.raise_for_status()
+        token_data = resp.json()
+
+        YOUTUBE_CONFIG["access_token"] = token_data["access_token"]
+        # YouTube может вернуть новый refresh_token
+        if "refresh_token" in token_data:
+            YOUTUBE_CONFIG["refresh_token"] = token_data["refresh_token"]
+
+        # Обновляем переменные окружения
+        os.environ["YOUTUBE_TOKEN"] = YOUTUBE_CONFIG["access_token"]
+        if "refresh_token" in token_data:
+            os.environ["YOUTUBE_REFRESH_TOKEN"] = YOUTUBE_CONFIG["refresh_token"]
+
+        print("[YOUTUBE] Token refreshed successfully")
+        return True
+    except Exception as e:
+        print(f"[YOUTUBE] Failed to refresh token: {e}")
+        return False
+
+def make_youtube_request(method: str, url: str, headers: Dict = None, params: Dict = None, json: Dict = None, timeout: int = 5) -> requests.Response:
+    """Делает запрос к YouTube API с автоматическим рефрешем токена при 401"""
+    if headers is None:
+        headers = {}
+    if "Authorization" not in headers:
+        headers["Authorization"] = f"Bearer {YOUTUBE_CONFIG['access_token']}"
+
+    resp = requests.request(method, url, headers=headers, params=params, json=json, timeout=timeout)
+
+    # Если 401 Unauthorized, пытаемся рефрешить токен и повторить запрос
+    if resp.status_code == 401:
+        if refresh_youtube_token():
+            # Обновляем заголовок с новым токеном
+            headers["Authorization"] = f"Bearer {YOUTUBE_CONFIG['access_token']}"
+            resp = requests.request(method, url, headers=headers, params=params, json=json, timeout=timeout)
+
+    return resp
+
 TROVO_CONFIG = {
     "client_id": os.getenv("TROVO_CLIENT_ID", ""),
+    "client_secret": os.getenv("TROVO_CLIENT_SECRET", ""),
     "access_token": os.getenv("TROVO_TOKEN", ""),
+    "refresh_token": os.getenv("TROVO_REFRESH_TOKEN", ""),
     "channel_id": os.getenv("TROVO_CHANNEL_ID", ""),
 }
+
+def refresh_trovo_token() -> bool:
+    """Обновляет токен Trovo с помощью refresh token"""
+    try:
+        url = "https://open-api.trovo.live/openplatform/refreshtoken"
+        data = {
+            "grant_type": "refresh_token",
+            "client_id": TROVO_CONFIG["client_id"],
+            "client_secret": TROVO_CONFIG["client_secret"],
+            "refresh_token": TROVO_CONFIG["refresh_token"]
+        }
+        resp = requests.post(url, data=data, timeout=10)
+        resp.raise_for_status()
+        token_data = resp.json()
+
+        TROVO_CONFIG["access_token"] = token_data["access_token"]
+        if "refresh_token" in token_data:
+            TROVO_CONFIG["refresh_token"] = token_data["refresh_token"]
+
+        # Обновляем переменные окружения
+        os.environ["TROVO_TOKEN"] = TROVO_CONFIG["access_token"]
+        if "refresh_token" in token_data:
+            os.environ["TROVO_REFRESH_TOKEN"] = TROVO_CONFIG["refresh_token"]
+
+        print("[TROVO] Token refreshed successfully")
+        return True
+    except Exception as e:
+        print(f"[TROVO] Failed to refresh token: {e}")
+        return False
+
+def make_trovo_request(method: str, url: str, headers: Dict = None, params: Dict = None, json: Dict = None, timeout: int = 5) -> requests.Response:
+    """Делает запрос к Trovo API с автоматическим рефрешем токена при 401"""
+    if headers is None:
+        headers = {}
+    if "Client-ID" not in headers:
+        headers["Client-ID"] = TROVO_CONFIG["client_id"]
+    if "Authorization" not in headers:
+        headers["Authorization"] = f"OAuth {TROVO_CONFIG['access_token']}"
+
+    resp = requests.request(method, url, headers=headers, params=params, json=json, timeout=timeout)
+
+    # Если 401 Unauthorized, пытаемся рефрешить токен и повторить запрос
+    if resp.status_code == 401:
+        if refresh_trovo_token():
+            # Обновляем заголовок с новым токеном
+            headers["Authorization"] = f"OAuth {TROVO_CONFIG['access_token']}"
+            resp = requests.request(method, url, headers=headers, params=params, json=json, timeout=timeout)
+
+    return resp
 
 VKPLAY_CONFIG = {
     "access_token": os.getenv("VKPLAY_TOKEN", ""),
@@ -103,20 +256,16 @@ def get_twitch_game_id(game_name: str) -> Optional[str]:
     """Получает ID игры в Twitch по названию"""
     if not game_name:
         return None
-    
+
     if not TWITCH_CONFIG["access_token"]:
         print("[TWITCH] Missing access_token")
         return None
-    
+
     url = "https://api.twitch.tv/helix/games"
-    headers = {
-        "Client-ID": TWITCH_CONFIG["client_id"],
-        "Authorization": f"Bearer {TWITCH_CONFIG['access_token']}"
-    }
     params = {"name": game_name}
-    
+
     try:
-        resp = requests.get(url, headers=headers, params=params, timeout=5)
+        resp = make_twitch_request("GET", url, params=params)
         resp.raise_for_status()
         data = resp.json().get("data", [])
         if data:
@@ -129,7 +278,7 @@ def get_twitch_game_id(game_name: str) -> Optional[str]:
         print(f"[TWITCH] HTTP Error getting game ID: {e.response.status_code} - {e.response.text}")
     except Exception as e:
         print(f"[TWITCH] Error getting game ID: {e}")
-    
+
     return None
 
 def update_twitch(title: str, category: str) -> Dict:
@@ -137,29 +286,25 @@ def update_twitch(title: str, category: str) -> Dict:
     try:
         if not TWITCH_CONFIG["access_token"]:
             return {"success": False, "error": "Twitch token не настроен"}
-        
+
         if not TWITCH_CONFIG["broadcaster_id"]:
             return {"success": False, "error": "Twitch broadcaster_id не настроен"}
-        
+
         game_id = get_twitch_game_id(category) if category else None
-        
+
         url = "https://api.twitch.tv/helix/channels"
-        headers = {
-            "Client-ID": TWITCH_CONFIG["client_id"],
-            "Authorization": f"Bearer {TWITCH_CONFIG['access_token']}",
-            "Content-Type": "application/json"
-        }
+        headers = {"Content-Type": "application/json"}
         params = {"broadcaster_id": TWITCH_CONFIG["broadcaster_id"]}
-        
+
         body = {"title": title}
         if game_id:
             body["game_id"] = game_id
-        
+
         print(f"[TWITCH] Updating: title='{title}', game_id={game_id}")
-        
-        resp = requests.patch(url, headers=headers, params=params, json=body, timeout=5)
+
+        resp = make_twitch_request("PATCH", url, headers=headers, params=params, json=body)
         resp.raise_for_status()
-        
+
         print(f"[TWITCH] ✅ Success")
         return {"success": True, "message": "Twitch обновлен"}
     except Exception as e:
@@ -174,17 +319,14 @@ def update_youtube(title: str, category: str) -> Dict:
     try:
         if not YOUTUBE_CONFIG["access_token"]:
             return {"success": False, "error": "YouTube token не настроен"}
-        
+
         if not YOUTUBE_CONFIG["video_id"]:
             return {"success": False, "error": "YouTube video_id не настроен"}
-        
+
         url_put = "https://www.googleapis.com/youtube/v3/videos"
-        headers = {
-            "Authorization": f"Bearer {YOUTUBE_CONFIG['access_token']}",
-            "Content-Type": "application/json"
-        }
+        headers = {"Content-Type": "application/json"}
         params_put = {"part": "snippet"}
-        
+
         body = {
             "id": YOUTUBE_CONFIG["video_id"],
             "snippet": {
@@ -192,12 +334,12 @@ def update_youtube(title: str, category: str) -> Dict:
                 "categoryId": "20"  # 20 = Gaming (по умолчанию)
             }
         }
-        
+
         print(f"[YOUTUBE] Updating: title='{title}'")
-        
-        resp_put = requests.put(url_put, headers=headers, params=params_put, json=body, timeout=5)
+
+        resp_put = make_youtube_request("PUT", url_put, headers=headers, params=params_put, json=body)
         resp_put.raise_for_status()
-        
+
         print(f"[YOUTUBE] ✅ Success")
         return {"success": True, "message": "YouTube обновлен"}
     except Exception as e:
@@ -211,22 +353,21 @@ def get_trovo_category_id(category_name: str) -> Optional[str]:
     """Получает category_id Trovo по названию"""
     if not category_name:
         return None
-    
+
     if not TROVO_CONFIG["access_token"]:
         return None
-    
+
     try:
         url = "https://open-api.trovo.live/openplatform/searchcategory"
         headers = {
             "Accept": "application/json",
-            "Client-ID": TROVO_CONFIG["client_id"],
             "Content-Type": "application/json"
         }
         body = {"query": category_name, "limit": 1}
-        
-        resp = requests.post(url, headers=headers, json=body, timeout=5)
+
+        resp = make_trovo_request("POST", url, headers=headers, json=body)
         resp.raise_for_status()
-        
+
         data = resp.json().get("category_info", [])
         if data:
             category_id = data[0]["id"]
@@ -234,7 +375,7 @@ def get_trovo_category_id(category_name: str) -> Optional[str]:
             return category_id
     except Exception as e:
         print(f"[TROVO] Error getting category ID: {e}")
-    
+
     return None
 
 def update_trovo(title: str, category: str) -> Dict:
@@ -242,32 +383,30 @@ def update_trovo(title: str, category: str) -> Dict:
     try:
         if not TROVO_CONFIG["access_token"]:
             return {"success": False, "error": "Trovo token не настроен"}
-        
+
         if not TROVO_CONFIG["channel_id"]:
             return {"success": False, "error": "Trovo channel_id не настроен"}
-        
+
         category_id = get_trovo_category_id(category) if category else None
-        
+
         url = "https://open-api.trovo.live/openplatform/channels/update"
         headers = {
             "Accept": "application/json",
-            "Client-ID": TROVO_CONFIG["client_id"],
-            "Authorization": f"OAuth {TROVO_CONFIG['access_token']}",
             "Content-Type": "application/json"
         }
-        
+
         body = {
             "channel_id": int(TROVO_CONFIG["channel_id"]),
             "live_title": title
         }
         if category_id:
             body["category_id"] = category_id
-        
+
         print(f"[TROVO] Updating: title='{title}', category_id={category_id}")
-        
-        resp = requests.post(url, headers=headers, json=body, timeout=5)
+
+        resp = make_trovo_request("POST", url, headers=headers, json=body)
         resp.raise_for_status()
-        
+
         print(f"[TROVO] ✅ Success")
         return {"success": True, "message": "Trovo обновлен"}
     except Exception as e:

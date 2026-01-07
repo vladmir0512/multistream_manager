@@ -22,9 +22,60 @@ app = Flask(__name__)
 
 TWITCH_CONFIG = {
     "client_id": os.getenv("TWITCH_CLIENT_ID", "YOUR_CLIENT_ID"),
+    "client_secret": os.getenv("TWITCH_CLIENT_SECRET", "YOUR_CLIENT_SECRET"),
     "access_token": os.getenv("TWITCH_TOKEN", "YOUR_TOKEN"),
+    "refresh_token": os.getenv("TWITCH_REFRESH_TOKEN", "YOUR_REFRESH_TOKEN"),
     "broadcaster_id": os.getenv("TWITCH_BROADCASTER_ID", "YOUR_BROADCASTER_ID"),
 }
+
+def refresh_twitch_token() -> bool:
+    """Обновляет токен Twitch с помощью refresh token"""
+    try:
+        url = "https://id.twitch.tv/oauth2/token"
+        data = {
+            "grant_type": "refresh_token",
+            "refresh_token": TWITCH_CONFIG["refresh_token"],
+            "client_id": TWITCH_CONFIG["client_id"],
+            "client_secret": TWITCH_CONFIG["client_secret"]
+        }
+        resp = requests.post(url, data=data, timeout=10)
+        resp.raise_for_status()
+        token_data = resp.json()
+
+        TWITCH_CONFIG["access_token"] = token_data["access_token"]
+        if "refresh_token" in token_data:
+            TWITCH_CONFIG["refresh_token"] = token_data["refresh_token"]
+
+        # Обновляем переменные окружения, если возможно
+        os.environ["TWITCH_TOKEN"] = TWITCH_CONFIG["access_token"]
+        if "refresh_token" in token_data:
+            os.environ["TWITCH_REFRESH_TOKEN"] = TWITCH_CONFIG["refresh_token"]
+
+        print("[TWITCH] Token refreshed successfully")
+        return True
+    except Exception as e:
+        print(f"[TWITCH] Failed to refresh token: {e}")
+        return False
+
+def make_twitch_request(method: str, url: str, headers: Dict = None, params: Dict = None, json: Dict = None, timeout: int = 5) -> requests.Response:
+    """Делает запрос к Twitch API с автоматическим рефрешем токена при 401"""
+    if headers is None:
+        headers = {}
+    if "Authorization" not in headers:
+        headers["Authorization"] = f"Bearer {TWITCH_CONFIG['access_token']}"
+    if "Client-ID" not in headers:
+        headers["Client-ID"] = TWITCH_CONFIG["client_id"]
+
+    resp = requests.request(method, url, headers=headers, params=params, json=json, timeout=timeout)
+
+    # Если 401 Unauthorized, пытаемся рефрешить токен и повторить запрос
+    if resp.status_code == 401:
+        if refresh_twitch_token():
+            # Обновляем заголовок с новым токеном
+            headers["Authorization"] = f"Bearer {TWITCH_CONFIG['access_token']}"
+            resp = requests.request(method, url, headers=headers, params=params, json=json, timeout=timeout)
+
+    return resp
 
 YOUTUBE_CONFIG = {
     "access_token": os.getenv("YOUTUBE_TOKEN", "YOUR_TOKEN"),
@@ -87,45 +138,37 @@ def get_twitch_game_id(game_name: str) -> Optional[str]:
     """Получает ID игры в Twitch по названию"""
     if not game_name:
         return None
-    
+
     url = "https://api.twitch.tv/helix/games"
-    headers = {
-        "Client-ID": TWITCH_CONFIG["client_id"],
-        "Authorization": f"Bearer {TWITCH_CONFIG['access_token']}"
-    }
     params = {"name": game_name}
-    
+
     try:
-        resp = requests.get(url, headers=headers, params=params, timeout=5)
+        resp = make_twitch_request("GET", url, params=params)
         resp.raise_for_status()
         data = resp.json().get("data", [])
         if data:
             return data[0]["id"]
     except Exception as e:
         print(f"[TWITCH] Error getting game ID: {e}")
-    
+
     return None
 
 def update_twitch(title: str, category: str) -> Dict:
     """Обновляет название и категорию на Twitch"""
     try:
         game_id = get_twitch_game_id(category) if category else None
-        
+
         url = "https://api.twitch.tv/helix/channels"
-        headers = {
-            "Client-ID": TWITCH_CONFIG["client_id"],
-            "Authorization": f"Bearer {TWITCH_CONFIG['access_token']}",
-            "Content-Type": "application/json"
-        }
+        headers = {"Content-Type": "application/json"}
         params = {"broadcaster_id": TWITCH_CONFIG["broadcaster_id"]}
-        
+
         body = {"title": title}
         if game_id:
             body["game_id"] = game_id
-        
-        resp = requests.patch(url, headers=headers, params=params, json=body, timeout=5)
+
+        resp = make_twitch_request("PATCH", url, headers=headers, params=params, json=body)
         resp.raise_for_status()
-        
+
         return {"success": True, "message": "Twitch обновлен"}
     except Exception as e:
         return {"success": False, "error": str(e)}
